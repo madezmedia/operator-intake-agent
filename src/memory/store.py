@@ -1,11 +1,11 @@
 """Shared memory layer: every agent step reads/writes the same lead context.
 
-Dev backend: Redis. Production: ACMI/LogMem bridge (same profile/signal/timeline
+Dev backend: Redis. Production: ACMI bridge (same profile/signal/timeline
 semantics — swap MEMORY_BACKEND=acmi and point at the bridge).
 """
 import json
 import redis.asyncio as redis
-from .config import settings
+from ..config import settings
 
 _client: redis.Redis | None = None
 

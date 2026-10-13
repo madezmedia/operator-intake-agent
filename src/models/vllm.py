@@ -1,10 +1,12 @@
 """OpenAI-compatible client for the vLLM endpoint on AMD."""
 import httpx
-from .config import settings
+from ..config import settings
 
 
 async def chat(messages: list[dict], temperature: float = 0.3) -> str:
     """Send a chat completion request to the vLLM server. Returns the reply text."""
+    if settings.vllm_stub:
+        return "[stub] Thanks! What's the best phone number to reach you, and what day works?"
     async with httpx.AsyncClient(timeout=120) as client:
         resp = await client.post(
             f"{settings.vllm_endpoint}/chat/completions",
