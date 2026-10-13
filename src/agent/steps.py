@@ -1,49 +1,81 @@
-"""Agent steps: intake → qualify → book → follow-up.
+"""Agent loop: intake → qualify → book → follow-up, driven by model tool calls.
 
-Each step reads the lead's shared memory first, so nothing is ever re-asked.
-The model does the talking; these functions own the business logic.
+Every turn starts from the lead's shared memory, so nothing is ever re-asked.
+The model does the talking and picks the tool; tools own the business rules.
 """
+from __future__ import annotations
+
+import json
+
+from ..config import settings
 from ..memory import store
 from ..models import vllm
-from ..config import settings
+from . import tools
 
 SYSTEM = (
-    "You are the intake agent for {business}, a local service business. "
-    "Be warm, brief, and plain-spoken. Ask ONE question at a time. "
-    "Never re-ask something the lead already told you — it's in the context."
+    "You are the intake agent for {business}, a local home-services business.\n"
+    "Goal: capture the lead, qualify them, book a visit, or log a follow-up.\n"
+    "Rules:\n"
+    "- Be warm, brief and plain-spoken. Ask ONE question at a time.\n"
+    "- Whenever the lead shares a detail, call save_lead_details.\n"
+    "- Never re-ask anything already in 'Known about this lead'.\n"
+    "- For prices, hours, service area or warranty, call lookup_business_info. Never guess prices.\n"
+    "- Once you have name, phone and service, call qualify_lead, then offer up to 3 slots.\n"
+    "- Only call book_appointment with a slot_id the lead agreed to.\n"
+    "- If they are not ready, call schedule_followup.\n"
 )
+
+
+def _context(lead: dict) -> str:
+    known = {k: v for k, v in lead.items() if k not in ("evolus_execution",)}
+    return (f"Known about this lead: {json.dumps(known)}\n"
+            f"Current stage: {lead.get('stage', 'intake')} (intake → qualify → book → followup).")
 
 
 async def handle_message(lead_id: str, user_text: str) -> str:
     lead = await store.get_lead(lead_id)
-    stage = lead.get("stage", "intake")
+    if not lead:
+        lead = await store.update_lead(lead_id, {"stage": "intake"})
+        await store.log_event(lead_id, "intake", "new lead")
+    history = await store.get_messages(lead_id)
 
     messages = [
         {"role": "system", "content": SYSTEM.format(business=settings.business_name)},
-        {"role": "system", "content": f"Known about this lead so far: {lead}"},
-        {"role": "system", "content": f"Current stage: {stage}. Stages: intake → qualify → book → followup."},
+        {"role": "system", "content": _context(lead)},
+        *history,
         {"role": "user", "content": user_text},
     ]
-    reply = await vllm.chat(messages)
-
     await store.log_event(lead_id, "message", f"lead: {user_text[:120]}")
+
+    reply = ""
+    for _ in range(settings.max_tool_rounds):
+        out = await vllm.chat_with_tools(messages, tools.TOOLS)
+        if not out["tool_calls"]:
+            reply = out["content"]
+            break
+        messages.append({
+            "role": "assistant", "content": out["content"] or "",
+            "tool_calls": [{"id": c["id"], "type": "function",
+                            "function": {"name": c["name"], "arguments": json.dumps(c["arguments"])}}
+                           for c in out["tool_calls"]],
+        })
+        for c in out["tool_calls"]:
+            result = await tools.run(lead_id, c["name"], c["arguments"])
+            await store.log_event(lead_id, "tool", f"{c['name']} -> {json.dumps(result)[:160]}")
+            messages.append({"role": "tool", "tool_call_id": c["id"], "name": c["name"],
+                             "content": json.dumps(result)})
+        # Refresh the known-facts line so the next round sees what tools just saved.
+        messages[1] = {"role": "system", "content": _context(await store.get_lead(lead_id))}
+
+    if not reply:
+        reply = "Thanks! Someone from our team will follow up shortly."
+
+    await store.append_messages(lead_id, {"role": "user", "content": user_text},
+                                {"role": "assistant", "content": reply})
     await store.log_event(lead_id, "message", f"agent: {reply[:120]}")
     return reply
 
 
 async def qualify(lead_id: str) -> dict:
-    """Score the lead 0-100 based on shared context. Returns {score, qualified}."""
-    lead = await store.get_lead(lead_id)
-    verdict = await vllm.chat([
-        {"role": "system", "content": "Score this service lead 0-100 for likelihood to book. Reply with just the number."},
-        {"role": "user", "content": str(lead)},
-    ])
-    try:
-        score = int("".join(c for c in verdict if c.isdigit()) or 0)
-    except ValueError:
-        score = 0
-    qualified = score >= 60
-    await store.update_lead(lead_id, {"score": score, "qualified": qualified,
-                                      "stage": "book" if qualified else "followup"})
-    await store.log_event(lead_id, "qualification", f"score={score} qualified={qualified}")
-    return {"score": score, "qualified": qualified}
+    """Kept for callers outside the chat loop."""
+    return await tools.qualify_lead(lead_id)

@@ -23,6 +23,29 @@ docker compose up --build
 # open http://localhost:8000
 ```
 
+Runs with no keys: `VLLM_STUB=true` uses a rule-based fake model and Evolus calls are skipped when `EVOLUS_API_KEY` is empty. `GET /healthz` shows which integrations are live (never the keys).
+
+Endpoints: `GET /` chat widget · `POST /chat {lead_id, message}` · `GET /lead/{id}` shared-memory profile · `GET /lead/{id}/timeline` every step the agent took.
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q   # in-process Redis, no network, no keys
+```
+
+## How the agent decides
+
+The open model (Qwen2.5-7B-Instruct on AMD via vLLM, Hermes tool parser) picks a tool each turn; the tools own the business rules:
+
+| Tool | Does | Evolus |
+|---|---|---|
+| `save_lead_details` | writes facts to shared memory | — |
+| `lookup_business_info` | answers price/area/hours questions | agent chat over the knowledge library |
+| `qualify_lead` | deterministic 0–100 score, returns open slots | — |
+| `check_availability` / `book_appointment` | mock calendar, no double-booking | runs the intake workflow with the lead summary |
+| `schedule_followup` | logs a follow-up for leads not ready to book | AI Tool drafts the message |
+
 ## Architecture
 
 ```

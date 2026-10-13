@@ -29,6 +29,26 @@
 - Block 2: **workflow** (intake → qualify → book → follow-up pipeline, triggered by API)
 - Our app calls Evolus APIs; vLLM endpoint is the model's brain; shared memory (ACMI) keeps context across steps.
 
+## App wiring (step 3, `src/evolus/client.py`)
+| What | Call | Used by |
+|---|---|---|
+| Auth | `X-ApiKey` + `X-Application-Id` headers on every call | all |
+| Workflow run | `POST /api/v1/workflows/{id}/execute` body `{input, text}` | `book_appointment` hands the booked lead to the intake workflow |
+| Workflow status | `GET /api/v1/workflows/executions/{executionId}` (poll every 2s, 90s cap) | `execute_workflow(wait=True)` |
+| Agent chat | `POST https://api.evolus.ai/v1/chat/completions`, model `<applicationId>:<agentId>` (or REST `ask` with `EVOLUS_AGENT_CHAT_MODE=rest`) | `lookup_business_info` (knowledge library answers) |
+| AI Tool | `POST /api/v1/ai-tools/{id}/execute` | `schedule_followup` drafts the follow-up text |
+
+**Not yet confirmed against the console docs:** the execution-status, AI Tool and REST `ask` paths, and the response field names (the client accepts `executionId`/`id`, `status`/`state`, `output`/`result`). Each path is an env override (`EVOLUS_*_PATH`), so a mismatch is a one-line `.env` fix, not a code change. Confirm on the first live call.
+
+Without `EVOLUS_API_KEY` the app runs offline: Evolus calls are skipped, logged on the lead timeline, and the chat flow still completes. An Evolus outage never blocks a booking.
+
+## IDs to record here (after step 2)
+- Agent ID (knowledge library agent):
+- Chat widget ID:
+- Knowledge library ID:
+- Intake workflow ID:
+- Follow-up AI Tool ID (optional):
+
 ## Open questions
 - API key issuance flow (check in-console after kickoff).
 - Whether 50k credits cover inference or platform only (model is BYO on AMD anyway).
