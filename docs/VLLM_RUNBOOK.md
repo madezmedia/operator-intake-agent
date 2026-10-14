@@ -28,6 +28,7 @@ python -m vllm.entrypoints.openai.api_server \
   --host 0.0.0.0 --port 8000 \
   --dtype float16 \
   --enable-auto-tool-choice --tool-call-parser hermes \
+  --api-key "$VLLM_API_KEY" \
   > /tmp/vllm.log 2>&1 &
 tail -f /tmp/vllm.log   # wait for "Application startup complete"
 ```
@@ -52,7 +53,7 @@ curl -s http://<droplet-ip>:8000/v1/chat/completions -H "Content-Type: applicati
     "properties":{"name":{"type":"string"},"phone":{"type":"string"},"service":{"type":"string"}}}}}],
   "tool_choice":"auto"}'
 ```
-Port 8000 is publicly reachable (container port mapping bypasses UFW).
+Port 8000 is publicly reachable (container port mapping bypasses UFW), so always start vLLM with `--api-key` and add `-H "Authorization: Bearer $VLLM_API_KEY"` to the curl checks. Put the same value in the app's `.env` as `VLLM_API_KEY`.
 
 ## 5. Plug into the project
 ```bash

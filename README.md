@@ -27,6 +27,14 @@ Runs with no keys: `VLLM_STUB=true` uses a rule-based fake model and Evolus call
 
 Endpoints: `GET /` chat widget · `POST /chat {lead_id, message}` · `GET /lead/{id}` shared-memory profile · `GET /lead/{id}/timeline` every step the agent took.
 
+## Seed the knowledge library
+
+```bash
+# with EVOLUS_API_KEY, EVOLUS_APPLICATION_ID, EVOLUS_LIBRARY_ID in .env
+python -m scripts.seed_library        # uploads docs/knowledge/*.md
+python -m scripts.seed_library --list # indexing status
+```
+
 ## Tests
 
 ```bash
@@ -44,7 +52,7 @@ The open model (Qwen2.5-7B-Instruct on AMD via vLLM, Hermes tool parser) picks a
 | `lookup_business_info` | answers price/area/hours questions | agent chat over the knowledge library |
 | `qualify_lead` | deterministic 0–100 score, returns open slots | — |
 | `check_availability` / `book_appointment` | mock calendar, no double-booking | runs the intake workflow with the lead summary |
-| `schedule_followup` | logs a follow-up for leads not ready to book | AI Tool drafts the message |
+| `schedule_followup` | logs a follow-up for leads not ready to book | `email` AI Tool drafts the message |
 
 ## Architecture
 

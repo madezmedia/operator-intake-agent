@@ -16,14 +16,10 @@ class Settings(BaseSettings):
     evolus_workspace_id: str = ""    # legacy name; used if application_id is empty
     evolus_agent_id: str = ""        # knowledge-library agent (FAQ / pricing answers)
     evolus_intake_workflow_id: str = ""
-    evolus_followup_tool_id: str = ""  # optional AI Tool for follow-up drafting
+    evolus_followup_tool: str = ""  # AI Tool name, e.g. "email" (drafts follow-ups; uses credits)
+    evolus_library_id: str = ""      # knowledge library, for scripts/seed_library.py
     evolus_api_base: str = "https://api.evolus.ai/api/v1"
     evolus_openai_base: str = "https://api.evolus.ai/v1"
-    # Paths not yet confirmed against the console docs; override in .env if they differ.
-    evolus_agent_ask_path: str = "/agents/{agent_id}/ask"
-    evolus_execution_status_path: str = "/workflows/executions/{execution_id}"
-    evolus_ai_tool_path: str = "/ai-tools/{tool_id}/execute"
-    evolus_agent_chat_mode: str = "openai"  # openai | rest
     evolus_timeout: float = 60.0
     evolus_poll_seconds: float = 2.0
     evolus_poll_timeout: float = 90.0

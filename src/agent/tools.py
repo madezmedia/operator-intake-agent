@@ -82,8 +82,11 @@ async def save_lead_details(lead_id: str, **fields) -> dict:
 
 
 async def lookup_business_info(lead_id: str, question: str = "") -> dict:
+    lead = await store.get_lead(lead_id)
     try:
-        res = await evolus.ask_agent(question)
+        res = await evolus.ask_agent(question, conversation_id=lead.get("evolus_conversation"))
+        if res.get("conversation_id"):
+            await store.update_lead(lead_id, {"evolus_conversation": res["conversation_id"]})
     except evolus.EvolusError as e:
         log.warning("knowledge lookup failed: %s", e)
         res = {"answer": None, "error": "knowledge library unavailable"}
@@ -141,10 +144,12 @@ async def book_appointment(lead_id: str, slot_id: str = "first") -> dict:
 async def schedule_followup(lead_id: str, reason: str = "", when: str = "tomorrow") -> dict:
     lead = await store.get_lead(lead_id)
     draft = None
-    if settings.evolus_followup_tool_id:
+    if settings.evolus_followup_tool:
+        brief = (f"Write a short, friendly follow-up text from {settings.business_name} to "
+                 f"{lead.get('name', 'the customer')} about their {lead.get('service', 'service request')}. "
+                 f"Reason: {reason}. Send: {when}.")
         try:
-            res = await evolus.run_ai_tool(settings.evolus_followup_tool_id,
-                                           {"lead": lead, "reason": reason, "when": when})
+            res = await evolus.run_ai_tool(settings.evolus_followup_tool, brief)
             draft = res.get("output")
         except evolus.EvolusError as e:
             log.warning("follow-up tool failed: %s", e)
