@@ -2,8 +2,28 @@ import json
 
 import httpx
 
-from src.config import settings
+from src.config import Settings, settings
 from src.models import vllm
+
+
+def _fresh_settings(monkeypatch, **env):
+    for name in ("VLLM_STUB", "USE_STUB"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    return Settings(_env_file=None)
+
+
+def test_stub_defaults_on(monkeypatch):
+    assert _fresh_settings(monkeypatch).vllm_stub is True
+
+
+def test_use_stub_alias(monkeypatch):
+    assert _fresh_settings(monkeypatch, USE_STUB="false").vllm_stub is False
+
+
+def test_vllm_stub_wins_over_use_stub(monkeypatch):
+    assert _fresh_settings(monkeypatch, VLLM_STUB="true", USE_STUB="false").vllm_stub is True
 
 
 def test_normalize_openai_tool_calls():

@@ -1,0 +1,10 @@
+title = "operator-intake-agent"
+
+# The README states the public stub switch. That string is not a credential.
+# History is left as-is; this only stops the false positive.
+[allowlist]
+description = "README stub-mode assignment VLLM_STUB=true"
+condition = "AND"
+paths = ['''README\.md''']
+regexTarget = "secret"
+regexes = ['''(?i)^vllm_stub=true$''']

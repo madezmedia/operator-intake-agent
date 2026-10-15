@@ -16,6 +16,12 @@ class ChatIn(BaseModel):
     message: str
 
 
+@app.get("/health")
+async def health():
+    """Liveness. 200 when the process is up. No secrets."""
+    return {"ok": True}
+
+
 @app.get("/healthz")
 async def healthz():
     """Liveness plus non-secret integration status."""
