@@ -3,20 +3,32 @@ services:
     build: .
     ports:
       - "8000:8000"
+    # Optional. Missing .env is fine: stub mode is the default.
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      # VLLM_STUB wins. USE_STUB applies only when VLLM_STUB is unset.
+      VLLM_STUB: ${VLLM_STUB:-${USE_STUB:-true}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MEMORY_BACKEND: ${MEMORY_BACKEND:-redis}
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
-  # Optional local memory backend for development.
-  # Production uses the shared ACMI layer.
+  # Local memory for development. Production swaps MEMORY_BACKEND=acmi.
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
     volumes:
       - agent-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
 
 volumes:
   agent-redis:

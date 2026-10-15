@@ -1,4 +1,5 @@
 """Shared config loaded from environment. No secrets have defaults here."""
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,7 +8,12 @@ class Settings(BaseSettings):
     vllm_endpoint: str = "http://localhost:8000/v1"
     vllm_model: str = "Qwen/Qwen2.5-7B-Instruct"
     vllm_api_key: str = "not-needed"
-    vllm_stub: bool = False  # true = rule-based fake model, no network (tests / first run)
+    # Stub is the default so `docker compose up` and a public URL need no credentials.
+    # VLLM_STUB wins when both are set. USE_STUB is the alias used when VLLM_STUB is absent.
+    vllm_stub: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("VLLM_STUB", "USE_STUB"),
+    )
     vllm_timeout: float = 60.0
 
     # --- Evolus workspace (REST + OpenAI-compatible agent chat) ---

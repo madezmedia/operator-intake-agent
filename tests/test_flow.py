@@ -1,6 +1,15 @@
 """End-to-end intake → qualify → book with the stub model and Evolus offline."""
+from fastapi.testclient import TestClient
+
 from src.agent import steps
+from src.main import app
 from src.memory import store
+
+
+def test_health_is_live():
+    response = TestClient(app).get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
 
 
 async def test_full_intake_to_booking():
