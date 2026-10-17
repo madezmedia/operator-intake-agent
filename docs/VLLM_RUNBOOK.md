@@ -24,13 +24,18 @@ GPU Droplets → Create GPU Droplet:
 ssh root@<droplet-ip>
 docker exec -it rocm /bin/bash
 python -m vllm.entrypoints.openai.api_server \
-  --model Qwen/Qwen3-32B \
+  --model Qwen/Qwen2.5-7B-Instruct \
   --host 0.0.0.0 --port 8000 \
   --dtype float16 \
+  --enable-auto-tool-choice --tool-call-parser hermes \
+  --api-key "$VLLM_API_KEY" \
   > /tmp/vllm.log 2>&1 &
 tail -f /tmp/vllm.log   # wait for "Application startup complete"
 ```
-Model pick: Qwen3-32B is a good hackathon middle ground — strong enough for real
+**Tool calling is required:** keep `--enable-auto-tool-choice --tool-call-parser hermes`.
+Without them the app still parses Qwen's `<tool_call>` text as a fallback, but run with the flags.
+
+Model pick (locked for the submission): Qwen2.5-7B-Instruct. Qwen3-32B is an upgrade option — strong enough for real
 agent reasoning, fits easily in 192 GB VRAM. Qwen2.5-1.5B loads in seconds if you
 want a smoke test first. Llama needs a license accept on HF; Qwen doesn't.
 
@@ -38,15 +43,24 @@ want a smoke test first. Llama needs a license accept on HF; Qwen doesn't.
 ```bash
 curl -s http://<droplet-ip>:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model":"Qwen/Qwen3-32B","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"Qwen/Qwen2.5-7B-Instruct","messages":[{"role":"user","content":"Hello"}]}'
+
+# Tool-calling check: expect "tool_calls" in the reply
+curl -s http://<droplet-ip>:8000/v1/chat/completions -H "Content-Type: application/json" -d '{
+  "model":"Qwen/Qwen2.5-7B-Instruct",
+  "messages":[{"role":"user","content":"Book me in, I am Dana, 704-555-0142, AC is broken"}],
+  "tools":[{"type":"function","function":{"name":"save_lead_details","parameters":{"type":"object",
+    "properties":{"name":{"type":"string"},"phone":{"type":"string"},"service":{"type":"string"}}}}}],
+  "tool_choice":"auto"}'
 ```
-Port 8000 is publicly reachable (container port mapping bypasses UFW).
+Port 8000 is publicly reachable (container port mapping bypasses UFW), so always start vLLM with `--api-key` and add `-H "Authorization: Bearer $VLLM_API_KEY"` to the curl checks. Put the same value in the app's `.env` as `VLLM_API_KEY`.
 
 ## 5. Plug into the project
 ```bash
 # ~/workspace/goals/amd-hackathon-act-iii-evolus-business-agents-entry/project/.env
 VLLM_ENDPOINT=http://<droplet-ip>:8000/v1
-VLLM_MODEL=Qwen/Qwen3-32B
+VLLM_MODEL=Qwen/Qwen2.5-7B-Instruct
+VLLM_STUB=false
 ```
 
 ## Cost guard

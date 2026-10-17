@@ -29,7 +29,26 @@
 - Block 2: **workflow** (intake → qualify → book → follow-up pipeline, triggered by API)
 - Our app calls Evolus APIs; vLLM endpoint is the model's brain; shared memory (ACMI) keeps context across steps.
 
+## App wiring (`src/evolus/client.py`), per https://evolus.ai/en/developers
+| What | Call | Used by |
+|---|---|---|
+| REST auth | `X-ApiKey` + `X-Application-Id` | workflows, AI Tools, libraries |
+| Agent chat | `POST https://api.evolus.ai/v1/chat/completions`, `Authorization: Bearer <key>`, model `<applicationId>:<agentId>`, `X-Conversation-Id` kept per lead | `lookup_business_info` (knowledge library answers) |
+| Workflow run | `POST /api/v1/workflows/{id}/execute`, multipart `input` (text) + `parameters` (flat JSON) → 202 `executionId` | `book_appointment` hands the booked lead to the intake workflow |
+| Workflow status | `GET /api/v1/workflows/{id}/executions/{executionId}`: Pending, Running, Completed, Failed | `execute_workflow(wait=True)` |
+| AI Tool | `POST /api/v1/ai-tools/{tool}/run` `{text, secondaryText, options}` (tool `email`) | `schedule_followup` drafts the follow-up text |
+| Library upload | `POST /api/v1/memories/{libraryId}/documents?language=en`, multipart `file` | `python -m scripts.seed_library` uploads `docs/knowledge/*.md` |
+
+Errors: 402 = credits exhausted, 409 = workflow switched off. Without `EVOLUS_API_KEY` the app runs offline: calls are skipped, logged on the lead timeline, and the chat flow still completes. An Evolus outage never blocks a booking.
+
+## IDs to record here (after step 2)
+- Agent ID (knowledge library agent):
+- Chat widget ID:
+- Knowledge library ID (EVOLUS_LIBRARY_ID):
+- Intake workflow ID:
+- Follow-up AI Tool: built-in `email` tool (no ID needed)
+
 ## Open questions
 - API key issuance flow (check in-console after kickoff).
 - Whether 50k credits cover inference or platform only (model is BYO on AMD anyway).
-- No public docs site found — API details from in-console docs / kickoff materials.
+- Public quickstart: https://evolus.ai/en/developers. Full interactive reference is inside the console.

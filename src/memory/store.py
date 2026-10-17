@@ -4,6 +4,7 @@ Dev backend: Redis. Production: ACMI bridge (same profile/signal/timeline
 semantics — swap MEMORY_BACKEND=acmi and point at the bridge).
 """
 import json
+import time
 import redis.asyncio as redis
 from ..config import settings
 
@@ -33,4 +34,33 @@ async def update_lead(lead_id: str, patch: dict) -> dict:
 
 async def log_event(lead_id: str, kind: str, text: str) -> None:
     """Append a timeline event for a lead (intake, qualification, booking, follow-up)."""
-    await _client_or_raise().rpush(f"lead:{lead_id}:timeline", json.dumps({"kind": kind, "text": text}))
+    await _client_or_raise().rpush(f"lead:{lead_id}:timeline", json.dumps(
+        {"ts": int(time.time() * 1000), "kind": kind, "text": text}))
+
+
+async def get_timeline(lead_id: str) -> list[dict]:
+    raw = await _client_or_raise().lrange(f"lead:{lead_id}:timeline", 0, -1)
+    return [json.loads(r) for r in raw]
+
+
+async def append_messages(lead_id: str, *messages: dict, keep: int = 30) -> None:
+    """Conversation turns (user/assistant text only) for model context."""
+    key = f"lead:{lead_id}:messages"
+    c = _client_or_raise()
+    if messages:
+        await c.rpush(key, *[json.dumps(m) for m in messages])
+        await c.ltrim(key, -keep, -1)
+
+
+async def get_messages(lead_id: str, last: int = 20) -> list[dict]:
+    raw = await _client_or_raise().lrange(f"lead:{lead_id}:messages", -last, -1)
+    return [json.loads(r) for r in raw]
+
+
+async def claim_slot(slot_id: str, lead_id: str) -> bool:
+    """Reserve a calendar slot. False if someone already has it."""
+    return bool(await _client_or_raise().hsetnx("calendar:bookings", slot_id, lead_id))
+
+
+async def booked_slots() -> dict:
+    return await _client_or_raise().hgetall("calendar:bookings")
